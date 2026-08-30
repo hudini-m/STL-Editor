@@ -6,7 +6,8 @@ STL Editor is a Python desktop application for local STL deformation through ort
 
 - Open or drag-and-drop STL files.
 - Edit the projected outer silhouette in XY, XZ, or YZ.
-- View a live measurement ruler in every 2D editor (model units, usually millimeters).
+- View live horizontal and vertical rulers in every 2D editor (model units, usually millimeters).
+- Toggle a model-space orientation grid in every 2D editor.
 - Generate approximately equally spaced contour control points.
 - Drag control points in the active 2D plane only.
 - Shift-click control points to set anchors that constrain a local edit region.

@@ -55,6 +55,8 @@ class ViewportWidget(QWidget):
         self.mesh_actor = None
         self.contour_actor = None
         self.ruler_actor = None
+        self.grid_actor = None
+        self.grid_enabled = True
         self.control_point_actors = {}
         self.control_point_meshes = {}
         self.mesh_polydata = None
@@ -101,6 +103,12 @@ class ViewportWidget(QWidget):
             btn = QPushButton(text)
             btn.clicked.connect(func)
             layout.addWidget(btn)
+
+        self.grid_btn = QPushButton("Grid")
+        self.grid_btn.setCheckable(True)
+        self.grid_btn.setChecked(True)
+        self.grid_btn.toggled.connect(self.toggle_grid)
+        layout.addWidget(self.grid_btn)
 
         layout.addWidget(QLabel("Transparency"))
         self.transparency_slider = QSlider(Qt.Horizontal)
@@ -366,10 +374,12 @@ class ViewportWidget(QWidget):
         self.mesh_changed.emit(self.mesh_model.vertices.copy(), self.mesh_model.faces.copy())
         if record_history:
             self._push_history()
+            self._refresh_grid_actor()
             self._refresh_contour_actor()
             self._refresh_control_point_markers()
             self.status_message(f"Moved control point {index + 1} and deformed mesh")
         else:
+            self._refresh_grid_actor()
             self._refresh_contour_actor()
             self._refresh_control_point_markers()
         return True
@@ -416,6 +426,89 @@ class ViewportWidget(QWidget):
             render_lines_as_tubes=False,
             pickable=False,
         )
+
+    def _remove_grid_actor(self):
+        if self.grid_actor is None or self.plotter is None:
+            return
+        try:
+            self.plotter.remove_actor(self.grid_actor)
+        except Exception:
+            pass
+        self.grid_actor = None
+
+    @staticmethod
+    def _grid_step(span):
+        """Choose a readable 1/2/5 grid step with roughly ten divisions."""
+        target = max(float(span) / 10.0, 1e-9)
+        magnitude = 10.0 ** np.floor(np.log10(target))
+        normalized = target / magnitude
+        multiplier = 1.0 if normalized <= 1.0 else 2.0 if normalized <= 2.0 else 5.0 if normalized <= 5.0 else 10.0
+        return multiplier * magnitude
+
+    def _refresh_grid_actor(self):
+        """Draw a non-pickable model-space grid behind the active 2D plane."""
+        self._remove_grid_actor()
+        if (
+            self.plotter is None
+            or pv is None
+            or self.mesh_model is None
+            or not self.movement_plane_locked
+            or not self.grid_enabled
+        ):
+            return
+
+        try:
+            plane = self.movement_plane_combo.currentText()
+            projected = project_points(self.mesh_model.vertices, plane)
+            minimum = np.min(projected, axis=0)
+            maximum = np.max(projected, axis=0)
+            span = maximum - minimum
+            padding = max(float(np.max(span)) * 0.08, 1e-6)
+            lower = minimum - padding
+            upper = maximum + padding
+            step = self._grid_step(max(float(np.max(span)), 1e-6))
+
+            first_x = np.floor(lower[0] / step) * step
+            last_x = np.ceil(upper[0] / step) * step
+            first_y = np.floor(lower[1] / step) * step
+            last_y = np.ceil(upper[1] / step) * step
+            x_values = np.arange(first_x, last_x + step * 0.5, step)
+            y_values = np.arange(first_y, last_y + step * 0.5, step)
+
+            segments = []
+            for x_value in x_values:
+                segments.append([[x_value, first_y], [x_value, last_y]])
+            for y_value in y_values:
+                segments.append([[first_x, y_value], [last_x, y_value]])
+            if not segments:
+                return
+
+            bounds = self.mesh_model.get_bounds()
+            normal_axis = plane_normal_axis(plane)
+            depth = bounds[0, normal_axis] - max(float(np.linalg.norm(bounds[1] - bounds[0])) * 0.01, 1e-6)
+            points_2d = np.asarray(segments, dtype=float).reshape(-1, 2)
+            grid = pv.PolyData(lift_points(points_2d, depth, plane))
+            line_count = len(segments)
+            grid.lines = np.column_stack(
+                [np.full(line_count, 2, dtype=int), np.arange(line_count * 2, dtype=int).reshape(line_count, 2)]
+            ).ravel()
+            self.grid_actor = self.plotter.add_mesh(
+                grid,
+                name="editing_grid",
+                color="#cbd5e1",
+                opacity=0.8,
+                line_width=1,
+                render_lines_as_tubes=False,
+                pickable=False,
+            )
+        except Exception:
+            self.grid_actor = None
+
+    def toggle_grid(self, checked=False):
+        self.grid_enabled = bool(checked)
+        self._refresh_grid_actor()
+        if self.movement_plane_locked:
+            self.status_message("2D grid shown" if self.grid_enabled else "2D grid hidden")
 
     def _refresh_control_point_markers(self):
         if self.plotter is None or self.control_point_manager is None or pv is None:
@@ -494,6 +587,7 @@ class ViewportWidget(QWidget):
         try:
             self.movement_plane_locked = False
             self._remove_control_point_actors()
+            self._refresh_grid_actor()
             self._refresh_contour_actor()
             self._set_ruler_visible(False)
             self.set_camera_mode("perspective")
@@ -553,6 +647,7 @@ class ViewportWidget(QWidget):
         self.set_camera_mode("orthographic")
         self.set_camera_view(camera_views.get(plane, "XY"))
         self._set_ruler_visible(True)
+        self._refresh_grid_actor()
         if self.control_point_manager is not None:
             self.auto_generate_contour_points(60, plane, announce=False)
         self._refresh_contour_actor()
@@ -568,7 +663,7 @@ class ViewportWidget(QWidget):
                 self.ruler_actor = vtkLegendScaleActor()
                 self.ruler_actor.SetLabelModeToDistance()
                 self.ruler_actor.SetTopAxisVisibility(False)
-                self.ruler_actor.SetLeftAxisVisibility(False)
+                self.ruler_actor.SetLeftAxisVisibility(True)
                 self.ruler_actor.SetRightAxisVisibility(False)
                 self.ruler_actor.SetBottomAxisVisibility(True)
                 self.plotter.renderer.AddActor2D(self.ruler_actor)
