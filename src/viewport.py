@@ -27,6 +27,11 @@ try:
 except Exception:  # pragma: no cover
     QtInteractor = None
 
+try:
+    from vtkmodules.vtkRenderingAnnotation import vtkLegendScaleActor
+except Exception:  # pragma: no cover
+    vtkLegendScaleActor = None
+
 import trimesh
 
 from geometry.mesh_model import MeshModel
@@ -49,6 +54,7 @@ class ViewportWidget(QWidget):
         self.plotter = None
         self.mesh_actor = None
         self.contour_actor = None
+        self.ruler_actor = None
         self.control_point_actors = {}
         self.control_point_meshes = {}
         self.mesh_polydata = None
@@ -489,6 +495,7 @@ class ViewportWidget(QWidget):
             self.movement_plane_locked = False
             self._remove_control_point_actors()
             self._refresh_contour_actor()
+            self._set_ruler_visible(False)
             self.set_camera_mode("perspective")
             self.plotter.view_isometric()
             self.plotter.reset_camera()
@@ -545,11 +552,30 @@ class ViewportWidget(QWidget):
             self.movement_plane_combo.blockSignals(False)
         self.set_camera_mode("orthographic")
         self.set_camera_view(camera_views.get(plane, "XY"))
+        self._set_ruler_visible(True)
         if self.control_point_manager is not None:
             self.auto_generate_contour_points(60, plane, announce=False)
         self._refresh_contour_actor()
         self._refresh_control_point_markers()
         self.status_message(f"Movement plane: {plane} (2D only)")
+
+    def _set_ruler_visible(self, visible):
+        """Show a VTK distance ruler in orthographic editing views only."""
+        if self.plotter is None or vtkLegendScaleActor is None:
+            return
+        try:
+            if self.ruler_actor is None:
+                self.ruler_actor = vtkLegendScaleActor()
+                self.ruler_actor.SetLabelModeToDistance()
+                self.ruler_actor.SetTopAxisVisibility(False)
+                self.ruler_actor.SetLeftAxisVisibility(False)
+                self.ruler_actor.SetRightAxisVisibility(False)
+                self.ruler_actor.SetBottomAxisVisibility(True)
+                self.plotter.renderer.AddActor2D(self.ruler_actor)
+            self.ruler_actor.SetVisibility(bool(visible))
+            self.plotter.render()
+        except Exception:
+            pass
 
     def set_local_neighbor_count(self, count):
         self.local_neighbor_count = int(count)
