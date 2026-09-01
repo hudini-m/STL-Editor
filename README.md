@@ -51,6 +51,14 @@ python run.py
 7. Open **3D Inspection** to review the modified mesh.
 8. Save the current result as STL.
 
+## Example
+
+The screenshots below show the editor before and after a 2D contour adjustment. The grid, rulers, contour points, and read-only 3D inspection tab help keep the change easy to understand.
+
+![STL Editor before adjustment](docs/images/stl_changer.png)
+
+![STL Editor after adjustment](docs/images/stl_changer_adapted.png)
+
 Controls in a 2D plane:
 
 - Left drag: move a selected control point
