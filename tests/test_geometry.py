@@ -107,3 +107,24 @@ def test_dissolve_between_anchors_blends_only_the_bounded_interval():
     np.testing.assert_allclose(points[[0, 4]], [[0, 0, 0], [4, 0, 0]])
     np.testing.assert_allclose(points[1:4, 1], 0.0)
     np.testing.assert_allclose(points[5], [5, 1, 0])
+
+
+def test_exact_point_move_changes_only_the_selected_contour_point():
+    model = MeshModel(np.zeros((4, 3)), np.zeros((0, 3), dtype=int))
+    manager = ControlPointManager(model)
+    for point in [[0, 0, 0], [2, 0, 0], [2, 2, 0], [0, 2, 0]]:
+        manager.add_control_point(point)
+    original = np.asarray(manager.get_control_points()).copy()
+    assert manager.move_point_exact(1, [2.5, 0.5, 0])
+    moved = np.asarray(manager.get_control_points())
+    np.testing.assert_allclose(moved[1], [2.5, 0.5, 0])
+    np.testing.assert_allclose(moved[[0, 2, 3]], original[[0, 2, 3]])
+
+
+def test_plane_displacement_preserves_depth_in_xz_and_yz():
+    vertices = np.array([[0, 0, 5], [1, 2, 6], [4, 3, 8]], dtype=float)
+    source = np.array([[1, 2, 6]], dtype=float)
+    target = np.array([[3, 5, 99]], dtype=float)
+    for plane, depth_axis in [("XZ", 1), ("YZ", 0)]:
+        result = apply_plane_displacement_field(vertices, source, target, plane, support_radius=10.0)
+        np.testing.assert_array_equal(result[:, depth_axis], vertices[:, depth_axis])
