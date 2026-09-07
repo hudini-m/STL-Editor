@@ -8,3 +8,4 @@ scipy==1.10.1
 shapely==2.0.6
 mapbox-earcut==2.0.0
 networkx==3.4.2
+rtree==1.4.1
