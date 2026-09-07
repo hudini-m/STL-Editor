@@ -1,7 +1,7 @@
 import numpy as np
 
 from geometry.contour import ContourExtractor
-from geometry.deformation import apply_plane_displacement_field
+from geometry.deformation import apply_plane_displacement_field, flatten_plane_region
 from geometry.mesh_model import MeshModel
 from geometry.projection import lift_points, project_points
 from interaction.control_points import ControlPointManager
@@ -147,3 +147,15 @@ def test_dissolved_contour_displaces_matching_mesh_vertices():
     result = apply_plane_displacement_field(source.copy(), source, target, "XY", support_radius=3.0)
     np.testing.assert_allclose(result[1:4, :2], target[1:4, :2])
     np.testing.assert_array_equal(result[:, 2], source[:, 2])
+
+
+def test_flatten_region_places_curved_boundary_exactly_on_anchor_line():
+    contour = np.array(
+        [[0, 0, 7], [1, -2, 7], [2, -3, 7], [3, -2, 7], [4, 0, 7], [4, 4, 7], [0, 4, 7]],
+        dtype=float,
+    )
+    result = flatten_plane_region(contour.copy(), contour, [0, 1, 2, 3, 4], "XY", support_radius=2.0)
+    np.testing.assert_allclose(result[:5, 1], 0.0, atol=1e-10)
+    np.testing.assert_allclose(result[[0, 4], :2], contour[[0, 4], :2])
+    np.testing.assert_array_equal(result[:, 2], contour[:, 2])
+    np.testing.assert_allclose(result[5:], contour[5:])

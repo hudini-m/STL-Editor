@@ -132,20 +132,10 @@ class ControlPointManager:
 
     def dissolve_between_anchors(self):
         """Replace the contour interval between the first two anchors with a blend."""
-        anchors = self.get_pinned_points()
-        count = len(self.control_points)
-        if len(anchors) < 2 or count < 4:
-            return False
-        start, end = anchors[0], anchors[1]
-        path = [start]
-        cursor = start
-        while cursor != end:
-            cursor = (cursor + 1) % count
-            path.append(cursor)
-            if len(path) > count:
-                return False
+        path = self.get_dissolve_interval_indices()
         if len(path) < 3:
             return False
+        start, end = path[0], path[-1]
         positions = np.asarray(self.get_control_points(), dtype=float)
         from geometry.projection import PLANE_AXES, project_points
 
@@ -169,6 +159,21 @@ class ControlPointManager:
             return False
         self._update_contour_from_points()
         return True
+
+    def get_dissolve_interval_indices(self):
+        anchors = self.get_pinned_points()
+        count = len(self.control_points)
+        if len(anchors) < 2 or count < 4:
+            return []
+        start, end = anchors[0], anchors[1]
+        path = [start]
+        cursor = start
+        while cursor != end:
+            cursor = (cursor + 1) % count
+            path.append(cursor)
+            if len(path) > count:
+                return []
+        return path
 
     @staticmethod
     def _smootherstep(value):

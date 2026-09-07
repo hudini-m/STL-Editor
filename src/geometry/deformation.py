@@ -135,3 +135,59 @@ def apply_plane_displacement_field(vertices, source_points, target_points, plane
     result[:, first_axis] += offsets[:, 0]
     result[:, second_axis] += offsets[:, 1]
     return result
+
+
+def flatten_plane_region(vertices, contour_points, region_indices, plane, support_radius):
+    """Flatten one contour arc to its anchor segment with an inward falloff."""
+    result = np.asarray(vertices, dtype=float).copy()
+    contour = project_points(contour_points, plane)
+    indices = np.asarray(region_indices, dtype=int)
+    if len(indices) < 3 or support_radius <= 0:
+        return result
+    arc = contour[indices]
+    segments = np.diff(arc, axis=0)
+    segment_lengths = np.linalg.norm(segments, axis=1)
+    total_length = float(np.sum(segment_lengths))
+    if total_length <= 1e-12:
+        return result
+
+    projected_vertices = project_points(result, plane)
+    count = len(projected_vertices)
+    best_distance_squared = np.full(count, np.inf, dtype=float)
+    best_displacement = np.zeros_like(projected_vertices)
+    cumulative = np.concatenate([[0.0], np.cumsum(segment_lengths)])
+    anchor_start, anchor_end = arc[0], arc[-1]
+
+    for segment_index, (start, vector, length) in enumerate(zip(arc[:-1], segments, segment_lengths)):
+        if length <= 1e-12:
+            continue
+        relative = projected_vertices - start
+        fraction = np.clip((relative @ vector) / (length * length), 0.0, 1.0)
+        closest = start + fraction[:, np.newaxis] * vector
+        distance_squared = np.sum((projected_vertices - closest) ** 2, axis=1)
+        better = distance_squared < best_distance_squared
+        arc_fraction = (cumulative[segment_index] + fraction * length) / total_length
+        straight = anchor_start + arc_fraction[:, np.newaxis] * (anchor_end - anchor_start)
+        best_distance_squared[better] = distance_squared[better]
+        best_displacement[better] = (straight - closest)[better]
+
+    # Vertices are assigned to the edited arc only when it is closer than the
+    # untouched part of the contour. This prevents the opposite side moving.
+    outside_indices = np.setdiff1d(np.arange(len(contour)), indices[1:-1])
+    if len(outside_indices):
+        outside_distance = np.full(count, np.inf, dtype=float)
+        for outside_point in contour[outside_indices]:
+            outside_distance = np.minimum(
+                outside_distance, np.linalg.norm(projected_vertices - outside_point, axis=1)
+            )
+    else:
+        outside_distance = np.full(count, np.inf, dtype=float)
+    distance = np.sqrt(best_distance_squared)
+    active = (distance <= support_radius) & (distance <= outside_distance)
+    normalized = np.clip(distance / support_radius, 0.0, 1.0)
+    envelope = 1.0 - normalized * normalized * (3.0 - 2.0 * normalized)
+    offsets = best_displacement * envelope[:, np.newaxis] * active[:, np.newaxis]
+    first_axis, second_axis, _ = PLANE_AXES[plane]
+    result[:, first_axis] += offsets[:, 0]
+    result[:, second_axis] += offsets[:, 1]
+    return result

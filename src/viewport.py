@@ -35,7 +35,7 @@ except Exception:  # pragma: no cover
 import trimesh
 
 from geometry.mesh_model import MeshModel
-from geometry.deformation import DeformationEngine, apply_plane_displacement_field
+from geometry.deformation import DeformationEngine, apply_plane_displacement_field, flatten_plane_region
 from geometry.mesh_validation import format_mesh_validation_report
 from geometry.projection import lift_points, plane_normal_axis, project_points
 from interaction.control_points import ControlPointManager
@@ -858,18 +858,21 @@ class ViewportWidget(QWidget):
             self.status_message("Select a 2D plane and pin two boundary points first")
             return
         source_points = np.asarray(self.control_point_manager.get_control_points(), dtype=float)
+        region_indices = self.control_point_manager.get_dissolve_interval_indices()
         if not self.control_point_manager.dissolve_between_anchors():
             self.status_message("Dissolve requires two non-adjacent pinned points")
             return
-        target_points = np.asarray(self.control_point_manager.get_control_points(), dtype=float)
         bounds = self.mesh_model.get_bounds()
         plane = self.movement_plane_combo.currentText()
         plane_axes = {"XY": (0, 1), "XZ": (0, 2), "YZ": (1, 2)}[plane]
         radius = max(float(np.linalg.norm((bounds[1] - bounds[0])[list(plane_axes)])) * 0.25, 0.001)
-        vertices = apply_plane_displacement_field(self.mesh_model.vertices, source_points, target_points, plane, radius)
+        vertices = flatten_plane_region(
+            self.mesh_model.vertices, source_points, region_indices, plane, radius
+        )
         self.mesh_model.vertices = vertices
         if self.mesh_polydata is not None:
             self.mesh_polydata.points = vertices
+            self.mesh_polydata.Modified()
         self._push_history()
         self._refresh_grid_actor()
         self._refresh_contour_actor()
