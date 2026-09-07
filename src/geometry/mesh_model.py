@@ -8,6 +8,7 @@ class MeshModel:
         self.vertices = np.array(vertices, dtype=float) if vertices is not None else np.empty((0, 3), dtype=float)
         self.faces = np.array(faces, dtype=int) if faces is not None else np.empty((0, 3), dtype=int)
         self.original_vertices = self.vertices.copy()
+        self.original_faces = self.faces.copy()
         self.mesh = None
         self.trimesh_obj = None
 
@@ -16,6 +17,7 @@ class MeshModel:
         self.vertices = np.asarray(trimesh_obj.vertices, dtype=float)
         self.faces = np.asarray(trimesh_obj.faces, dtype=int)
         self.original_vertices = self.vertices.copy()
+        self.original_faces = self.faces.copy()
 
     def load_from_pyvista(self, pyvista_mesh):
         self.mesh = pyvista_mesh
@@ -53,6 +55,7 @@ class MeshModel:
     def copy(self):
         new_model = MeshModel(self.vertices.copy(), self.faces.copy())
         new_model.original_vertices = self.original_vertices.copy()
+        new_model.original_faces = self.original_faces.copy()
         return new_model
 
     @staticmethod
@@ -77,4 +80,3 @@ class MeshModel:
             triangles.append(faces[i + 1:i + 1 + n])
             i += n + 1
         return np.asarray(triangles, dtype=int)
-

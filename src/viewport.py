@@ -35,8 +35,9 @@ except Exception:  # pragma: no cover
 import trimesh
 
 from geometry.mesh_model import MeshModel
-from geometry.deformation import DeformationEngine, apply_plane_displacement_field, flatten_plane_region
+from geometry.deformation import DeformationEngine, apply_plane_displacement_field
 from geometry.mesh_validation import format_mesh_validation_report
+from geometry.mesh_cutting import cut_mesh_to_contour_chord
 from geometry.projection import lift_points, plane_normal_axis, project_points
 from interaction.control_points import ControlPointManager
 from interaction.picking import PickingManager
@@ -193,7 +194,7 @@ class ViewportWidget(QWidget):
         counts = np.full((faces.shape[0], 1), faces.shape[1], dtype=int)
         return np.hstack([counts, faces]).ravel()
 
-    def _apply_mesh_to_plotter(self):
+    def _apply_mesh_to_plotter(self, fit=True):
         if self.plotter is None or self.mesh_polydata is None:
             return
         if self.mesh_actor is not None:
@@ -212,7 +213,8 @@ class ViewportWidget(QWidget):
                 self.mesh_actor.GetProperty().SetRepresentationToWireframe()
             except Exception:
                 pass
-        self.fit_to_view()
+        if fit:
+            self.fit_to_view()
         self.plotter.render()
 
     def _enable_control_point_picking(self):
@@ -757,6 +759,7 @@ class ViewportWidget(QWidget):
     def _make_history_snapshot(self):
         return {
             "vertices": np.asarray(self.mesh_polydata.points, dtype=float).copy(),
+            "faces": np.asarray(self.mesh_model.faces, dtype=int).copy(),
             "points": [(position.copy(), pinned) for position, pinned in self.control_point_manager.control_points],
             "selected": self.control_point_manager.selected_point,
             "plane": self.control_point_manager.active_plane,
@@ -774,8 +777,14 @@ class ViewportWidget(QWidget):
             self.history_index = 0
 
     def _restore_history_state(self, snapshot):
-        self.mesh_polydata.points = snapshot["vertices"].copy()
         self.mesh_model.vertices = snapshot["vertices"].copy()
+        self.mesh_model.faces = snapshot.get("faces", self.mesh_model.faces).copy()
+        self.mesh_model.trimesh_obj = None
+        self.mesh_polydata = pv.PolyData(
+            self.mesh_model.vertices, self._faces_to_pyvista(self.mesh_model.faces)
+        )
+        self.mesh = self.mesh_polydata
+        self._apply_mesh_to_plotter(fit=False)
         self.control_point_manager.control_points = [(position.copy(), pinned) for position, pinned in snapshot["points"]]
         self.control_point_manager.selected_point = snapshot["selected"]
         self.control_point_manager.active_plane = snapshot["plane"]
@@ -799,8 +808,13 @@ class ViewportWidget(QWidget):
     def reset_view(self):
         if self.mesh_polydata is None:
             return
-        self.mesh_polydata.points = self.mesh_model.original_vertices.copy()
         self.mesh_model.vertices = self.mesh_model.original_vertices.copy()
+        self.mesh_model.faces = self.mesh_model.original_faces.copy()
+        self.mesh_model.trimesh_obj = None
+        self.mesh_polydata = pv.PolyData(
+            self.mesh_model.vertices, self._faces_to_pyvista(self.mesh_model.faces)
+        )
+        self.mesh = self.mesh_polydata
         self._push_history()
         self._apply_mesh_to_plotter()
         self.mesh_changed.emit(self.mesh_model.vertices.copy(), self.mesh_model.faces.copy())
@@ -859,26 +873,36 @@ class ViewportWidget(QWidget):
             return
         source_points = np.asarray(self.control_point_manager.get_control_points(), dtype=float)
         region_indices = self.control_point_manager.get_dissolve_interval_indices()
-        if not self.control_point_manager.dissolve_between_anchors():
+        if len(region_indices) < 3:
             self.status_message("Dissolve requires two non-adjacent pinned points")
             return
-        bounds = self.mesh_model.get_bounds()
         plane = self.movement_plane_combo.currentText()
-        plane_axes = {"XY": (0, 1), "XZ": (0, 2), "YZ": (1, 2)}[plane]
-        radius = max(float(np.linalg.norm((bounds[1] - bounds[0])[list(plane_axes)])) * 0.25, 0.001)
-        vertices = flatten_plane_region(
-            self.mesh_model.vertices, source_points, region_indices, plane, radius
+        try:
+            cut = cut_mesh_to_contour_chord(
+                self.mesh_model.vertices,
+                self.mesh_model.faces,
+                source_points,
+                region_indices,
+                plane,
+            )
+        except Exception as exc:
+            QMessageBox.warning(self, "Cut Region", f"Failed to cut mesh:\n{exc}")
+            return
+        self.mesh_model.vertices = np.asarray(cut.vertices, dtype=float)
+        self.mesh_model.faces = np.asarray(cut.faces, dtype=int)
+        self.mesh_model.trimesh_obj = cut
+        self.mesh_polydata = pv.PolyData(
+            self.mesh_model.vertices, self._faces_to_pyvista(self.mesh_model.faces)
         )
-        self.mesh_model.vertices = vertices
-        if self.mesh_polydata is not None:
-            self.mesh_polydata.points = vertices
-            self.mesh_polydata.Modified()
+        self.mesh = self.mesh_polydata
+        self._apply_mesh_to_plotter(fit=False)
+        self.control_point_manager.auto_generate_contour_points(len(source_points), plane)
         self._push_history()
         self._refresh_grid_actor()
         self._refresh_contour_actor()
         self._refresh_control_point_markers()
         self.mesh_changed.emit(self.mesh_model.vertices.copy(), self.mesh_model.faces.copy())
-        self.status_message("Region dissolved smoothly between anchors")
+        self.status_message("Region cut from the mesh and capped")
 
     def auto_generate_contour_points(self, density=60, plane=None, announce=True):
         if not self.movement_plane_locked:

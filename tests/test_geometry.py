@@ -1,8 +1,10 @@
 import numpy as np
+import trimesh
 
 from geometry.contour import ContourExtractor
 from geometry.deformation import apply_plane_displacement_field, flatten_plane_region
 from geometry.mesh_model import MeshModel
+from geometry.mesh_cutting import cut_mesh_to_contour_chord
 from geometry.projection import lift_points, project_points
 from interaction.control_points import ControlPointManager
 
@@ -159,3 +161,16 @@ def test_flatten_region_places_curved_boundary_exactly_on_anchor_line():
     np.testing.assert_allclose(result[[0, 4], :2], contour[[0, 4], :2])
     np.testing.assert_array_equal(result[:, 2], contour[:, 2])
     np.testing.assert_allclose(result[5:], contour[5:])
+
+
+def test_anchor_chord_cut_changes_topology_and_caps_actual_mesh():
+    mesh = trimesh.creation.icosphere(subdivisions=2, radius=10.0)
+    contour = np.array(
+        [[-10, 0, 0], [-7, -7, 0], [0, -10, 0], [7, -7, 0], [10, 0, 0], [0, 10, 0]],
+        dtype=float,
+    )
+    cut = cut_mesh_to_contour_chord(mesh.vertices, mesh.faces, contour, [0, 1, 2, 3, 4], "XY")
+    assert len(cut.faces) != len(mesh.faces)
+    assert np.min(cut.vertices[:, 1]) >= -1e-8
+    assert cut.is_watertight
+    assert cut.is_winding_consistent

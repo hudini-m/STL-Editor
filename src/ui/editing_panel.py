@@ -116,7 +116,7 @@ class EditingPanel(QWidget):
         self.brush_btn = QPushButton("Brush Selection")
         self.box_btn = QPushButton("Box Selection")
         self.connected_btn = QPushButton("Connected Region")
-        self.dissolve_btn = QPushButton("Dissolve Region Between Anchors")
+        self.dissolve_btn = QPushButton("Cut Region Between Anchors")
         selection_layout.addWidget(self.brush_btn)
         selection_layout.addWidget(self.box_btn)
         selection_layout.addWidget(self.connected_btn)
