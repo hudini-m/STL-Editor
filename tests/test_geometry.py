@@ -128,3 +128,22 @@ def test_plane_displacement_preserves_depth_in_xz_and_yz():
     for plane, depth_axis in [("XZ", 1), ("YZ", 0)]:
         result = apply_plane_displacement_field(vertices, source, target, plane, support_radius=10.0)
         np.testing.assert_array_equal(result[:, depth_axis], vertices[:, depth_axis])
+
+
+def test_unchanged_contour_points_do_not_cancel_visible_mesh_edit():
+    vertices = np.array([[0.1, 0.0, 3.0], [10.0, 10.0, 3.0]])
+    source = np.array([[0.0, 0.0, 3.0], *[[0.5, value, 3.0] for value in np.linspace(-1.0, 1.0, 20)]])
+    target = source.copy()
+    target[0, 1] = 2.0
+    result = apply_plane_displacement_field(vertices, source, target, "XY", support_radius=2.0)
+    assert result[0, 1] > 1.5
+    np.testing.assert_allclose(result[1], vertices[1])
+
+
+def test_dissolved_contour_displaces_matching_mesh_vertices():
+    source = np.array([[0, 0, 2], [1, 2, 2], [2, -1, 2], [3, 3, 2], [4, 0, 2]], dtype=float)
+    target = source.copy()
+    target[1:4, 1] = 0.0
+    result = apply_plane_displacement_field(source.copy(), source, target, "XY", support_radius=3.0)
+    np.testing.assert_allclose(result[1:4, :2], target[1:4, :2])
+    np.testing.assert_array_equal(result[:, 2], source[:, 2])

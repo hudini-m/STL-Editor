@@ -109,15 +109,24 @@ def apply_plane_displacement_field(vertices, source_points, target_points, plane
     target = project_points(target_points, plane)
     if len(source) == 0 or support_radius <= 0:
         return result
+    displacement = target - source
+    moved = np.linalg.norm(displacement, axis=1) > 1e-10
+    if not np.any(moved):
+        return result
+    # Unchanged contour points must not dilute a local edit. They previously made
+    # a visibly moved contour produce almost no corresponding mesh deformation.
+    source = source[moved]
+    displacement = displacement[moved]
     projected_vertices = project_points(result, plane)
     distances = np.linalg.norm(projected_vertices[:, np.newaxis, :] - source[np.newaxis, :, :], axis=2)
     normalized = np.clip(distances / support_radius, 0.0, 1.0)
     weights = (1.0 - normalized * normalized * (3.0 - 2.0 * normalized)) * (distances <= support_radius)
-    displacement = target - source
     totals = weights.sum(axis=1)
     active = totals > 1e-12
     offsets = np.zeros_like(projected_vertices)
-    offsets[active] = (weights[active] @ displacement) / totals[active, np.newaxis]
+    blended = (weights[active] @ displacement) / totals[active, np.newaxis]
+    envelope = np.max(weights[active], axis=1)
+    offsets[active] = blended * envelope[:, np.newaxis]
     exact_matches = distances <= 1e-10
     for vertex_index in np.where(np.any(exact_matches, axis=1))[0]:
         control_index = int(np.argmax(exact_matches[vertex_index]))
