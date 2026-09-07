@@ -117,6 +117,19 @@ class ControlPointManager:
         self._update_contour_from_points()
         return True
 
+    def move_point_exact(self, index, new_position):
+        """Move only one contour point, retaining the same validity checks."""
+        if not (0 <= index < len(self.control_points)) or self.is_point_pinned(index):
+            return False
+        original = [(position.copy(), pinned) for position, pinned in self.control_points]
+        position, pinned = self.control_points[index]
+        self.control_points[index] = (np.asarray(new_position, dtype=float), pinned)
+        if not self._is_valid_contour():
+            self.control_points = original
+            return False
+        self._update_contour_from_points()
+        return True
+
     @staticmethod
     def _smootherstep(value):
         value = float(np.clip(value, 0.0, 1.0))

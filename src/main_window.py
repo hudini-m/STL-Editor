@@ -71,6 +71,10 @@ class MainWindow(QMainWindow):
         self.editing_panel.pin_selected_requested.connect(self.viewport.pin_selected_control_point)
         self.editing_panel.validate_requested.connect(self.viewport.validate_mesh)
         self.editing_panel.neighbor_count_changed.connect(self.viewport.set_local_neighbor_count)
+        self.editing_panel.edit_mode_changed.connect(self.viewport.set_edit_mode)
+        self.editing_panel.radius_changed.connect(self.viewport.set_influence_radius)
+        self.editing_panel.strength_changed.connect(self.viewport.set_edit_strength)
+        self.editing_panel.falloff_changed.connect(self.viewport.set_falloff)
 
     def create_menu_bar(self):
         menubar = self.menuBar()

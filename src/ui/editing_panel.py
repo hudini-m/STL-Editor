@@ -20,6 +20,10 @@ class EditingPanel(QWidget):
     pin_selected_requested = Signal()
     validate_requested = Signal()
     neighbor_count_changed = Signal(int)
+    edit_mode_changed = Signal(str)
+    radius_changed = Signal(int)
+    strength_changed = Signal(int)
+    falloff_changed = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -38,6 +42,13 @@ class EditingPanel(QWidget):
         self.toggle_btn.setObjectName("primaryButton")
         control_layout.addWidget(self.toggle_btn)
         control_layout.addWidget(QLabel("Drag points to edit. Shift-click toggles anchors. Middle-drag pans; right-drag zooms."))
+
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("Edit mode:"))
+        self.edit_mode_combo = QComboBox()
+        self.edit_mode_combo.addItems(["Smooth contour", "Point-wise"])
+        mode_row.addWidget(self.edit_mode_combo)
+        control_layout.addLayout(mode_row)
 
         auto_row = QHBoxLayout()
         self.auto_btn = QPushButton("Auto Generate Contour Points")
@@ -137,6 +148,10 @@ class EditingPanel(QWidget):
         self.pin_btn.clicked.connect(self.pin_selected_requested.emit)
         self.validate_btn.clicked.connect(self.validate_requested.emit)
         self.neighbor_spin.valueChanged.connect(self.neighbor_count_changed.emit)
+        self.edit_mode_combo.currentTextChanged.connect(self.edit_mode_changed.emit)
+        self.radius_slider.valueChanged.connect(self.radius_changed.emit)
+        self.strength_slider.valueChanged.connect(self.strength_changed.emit)
+        self.falloff_combo.currentTextChanged.connect(self.falloff_changed.emit)
 
     def set_mesh_info(self, name, vertices, faces):
         self.info_label.setText(f"{name}\nVertices: {vertices}\nFaces: {faces}")

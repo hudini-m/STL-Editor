@@ -10,6 +10,8 @@ STL Editor is a Python desktop application for local STL deformation through ort
 - Toggle a model-space orientation grid in every 2D editor.
 - Generate approximately equally spaced contour control points.
 - Drag control points in the active 2D plane only.
+- Choose smooth contour editing or point-wise editing for a direct local vertex change.
+- Adjust influence radius and edit strength from the deformation controls.
 - Shift-click control points to set anchors that constrain a local edit region.
 - Preview selected, anchored, and locally affected control points.
 - Transfer a compact local 2D displacement field to the STL without changing the third axis.

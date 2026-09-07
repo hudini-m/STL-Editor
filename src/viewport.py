@@ -73,6 +73,10 @@ class ViewportWidget(QWidget):
         self._mouse_drag_changed = False
         self.movement_plane_locked = False
         self.local_neighbor_count = 4
+        self.edit_mode = "Smooth contour"
+        self.influence_radius_percent = 20
+        self.edit_strength_percent = 50
+        self.falloff_type = "Smoothstep"
 
         if pv is not None and QtInteractor is not None:
             self.plotter = QtInteractor(self)
@@ -356,17 +360,34 @@ class ViewportWidget(QWidget):
 
         vertices = np.asarray(self.mesh_model.vertices, dtype=float)
         source_points = np.asarray(self.control_point_manager.get_control_points(), dtype=float)
-        if not self.control_point_manager.move_point_locally(
-            index, new_position, neighbor_count=self.local_neighbor_count
-        ):
+        move_method = (
+            self.control_point_manager.move_point_exact
+            if self.edit_mode == "Point-wise"
+            else self.control_point_manager.move_point_locally
+        )
+        moved = (
+            move_method(index, new_position)
+            if self.edit_mode == "Point-wise"
+            else move_method(index, new_position, neighbor_count=self.local_neighbor_count)
+        )
+        if not moved:
             self.status_message("Drag rejected: contour would become invalid")
             return False
         target_points = np.asarray(self.control_point_manager.get_control_points(), dtype=float)
         bounds = self.mesh_model.get_bounds()
         plane = self.movement_plane_combo.currentText()
         plane_axes = {"XY": (0, 1), "XZ": (0, 2), "YZ": (1, 2)}[plane]
-        support_radius = max(float(np.linalg.norm((bounds[1] - bounds[0])[list(plane_axes)])) * 0.22, 0.001)
-        vertices = apply_plane_displacement_field(vertices, source_points, target_points, plane, support_radius)
+        plane_span = float(np.linalg.norm((bounds[1] - bounds[0])[list(plane_axes)]))
+        support_radius = max(plane_span * self.influence_radius_percent / 100.0, 0.001)
+        if self.edit_mode == "Point-wise":
+            projected_vertices = project_points(vertices, plane)
+            nearest_vertex = int(np.argmin(np.linalg.norm(projected_vertices - project_points(old_position, plane), axis=1)))
+            first_axis, second_axis, _ = (0, 1, 2) if plane == "XY" else (0, 2, 1) if plane == "XZ" else (1, 2, 0)
+            vertices[nearest_vertex, first_axis] += displacement[first_axis] * self.edit_strength_percent / 100.0
+            vertices[nearest_vertex, second_axis] += displacement[second_axis] * self.edit_strength_percent / 100.0
+        else:
+            target_points = source_points + (target_points - source_points) * self.edit_strength_percent / 100.0
+            vertices = apply_plane_displacement_field(vertices, source_points, target_points, plane, support_radius)
 
         self.mesh_model.vertices = vertices
         if self.mesh_polydata is not None:
@@ -676,6 +697,19 @@ class ViewportWidget(QWidget):
         self.local_neighbor_count = int(count)
         self._refresh_control_point_markers()
         self.status_message(f"Local neighbors: {self.local_neighbor_count}")
+
+    def set_edit_mode(self, mode):
+        self.edit_mode = str(mode)
+        self.status_message(f"Edit mode: {self.edit_mode}")
+
+    def set_influence_radius(self, value):
+        self.influence_radius_percent = int(value)
+
+    def set_edit_strength(self, value):
+        self.edit_strength_percent = int(value)
+
+    def set_falloff(self, value):
+        self.falloff_type = str(value)
 
     def toggle_wireframe(self, checked=False):
         self.is_wireframe = bool(checked)
