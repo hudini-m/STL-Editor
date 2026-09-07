@@ -93,3 +93,17 @@ def test_self_intersecting_drag_is_rejected_without_mutation():
     original = np.asarray(manager.get_control_points()).copy()
     assert not manager.move_point_locally(2, [0, 0, 0], neighbor_count=1)
     np.testing.assert_allclose(np.asarray(manager.get_control_points()), original)
+
+
+def test_dissolve_between_anchors_blends_only_the_bounded_interval():
+    model = MeshModel(np.zeros((8, 3)), np.zeros((0, 3), dtype=int))
+    manager = ControlPointManager(model)
+    for point in [[0, 0, 0], [1, 2, 0], [2, -1, 0], [3, 3, 0], [4, 0, 0], [5, 1, 0]]:
+        manager.add_control_point(point)
+    manager.pin_point(0)
+    manager.pin_point(4)
+    assert manager.dissolve_between_anchors()
+    points = np.asarray(manager.get_control_points())
+    np.testing.assert_allclose(points[[0, 4]], [[0, 0, 0], [4, 0, 0]])
+    np.testing.assert_allclose(points[1:4, 1], 0.0)
+    np.testing.assert_allclose(points[5], [5, 1, 0])

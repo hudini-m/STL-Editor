@@ -852,6 +852,31 @@ class ViewportWidget(QWidget):
         self._refresh_control_point_markers()
         self.status_message("Selected control point pinned")
 
+    def dissolve_region_between_anchors(self):
+        """Straighten and blend the contour interval bounded by two anchors."""
+        if not self.movement_plane_locked or self.control_point_manager is None or self.mesh_model is None:
+            self.status_message("Select a 2D plane and pin two boundary points first")
+            return
+        source_points = np.asarray(self.control_point_manager.get_control_points(), dtype=float)
+        if not self.control_point_manager.dissolve_between_anchors():
+            self.status_message("Dissolve requires two non-adjacent pinned points")
+            return
+        target_points = np.asarray(self.control_point_manager.get_control_points(), dtype=float)
+        bounds = self.mesh_model.get_bounds()
+        plane = self.movement_plane_combo.currentText()
+        plane_axes = {"XY": (0, 1), "XZ": (0, 2), "YZ": (1, 2)}[plane]
+        radius = max(float(np.linalg.norm((bounds[1] - bounds[0])[list(plane_axes)])) * 0.25, 0.001)
+        vertices = apply_plane_displacement_field(self.mesh_model.vertices, source_points, target_points, plane, radius)
+        self.mesh_model.vertices = vertices
+        if self.mesh_polydata is not None:
+            self.mesh_polydata.points = vertices
+        self._push_history()
+        self._refresh_grid_actor()
+        self._refresh_contour_actor()
+        self._refresh_control_point_markers()
+        self.mesh_changed.emit(self.mesh_model.vertices.copy(), self.mesh_model.faces.copy())
+        self.status_message("Region dissolved smoothly between anchors")
+
     def auto_generate_contour_points(self, density=60, plane=None, announce=True):
         if not self.movement_plane_locked:
             self.status_message("Select XY, YZ, or XZ before editing")

@@ -130,6 +130,46 @@ class ControlPointManager:
         self._update_contour_from_points()
         return True
 
+    def dissolve_between_anchors(self):
+        """Replace the contour interval between the first two anchors with a blend."""
+        anchors = self.get_pinned_points()
+        count = len(self.control_points)
+        if len(anchors) < 2 or count < 4:
+            return False
+        start, end = anchors[0], anchors[1]
+        path = [start]
+        cursor = start
+        while cursor != end:
+            cursor = (cursor + 1) % count
+            path.append(cursor)
+            if len(path) > count:
+                return False
+        if len(path) < 3:
+            return False
+        positions = np.asarray(self.get_control_points(), dtype=float)
+        from geometry.projection import PLANE_AXES, project_points
+
+        projected = project_points(positions[path], self.active_plane)
+        lengths = np.linalg.norm(np.diff(projected, axis=0), axis=1)
+        cumulative = np.concatenate([[0.0], np.cumsum(lengths)])
+        total = cumulative[-1]
+        if total <= 1e-12:
+            return False
+        first_axis, second_axis, _ = PLANE_AXES[self.active_plane]
+        original = [(position.copy(), pinned) for position, pinned in self.control_points]
+        for offset, point_index in enumerate(path[1:-1], start=1):
+            ratio = cumulative[offset] / total
+            position = positions[start] * (1.0 - ratio) + positions[end] * ratio
+            # Preserve each point's normal coordinate; only the active plane changes.
+            position[first_axis] = projected[0, 0] * (1.0 - ratio) + projected[-1, 0] * ratio
+            position[second_axis] = projected[0, 1] * (1.0 - ratio) + projected[-1, 1] * ratio
+            self.control_points[point_index] = (position, self.control_points[point_index][1])
+        if not self._is_valid_contour():
+            self.control_points = original
+            return False
+        self._update_contour_from_points()
+        return True
+
     @staticmethod
     def _smootherstep(value):
         value = float(np.clip(value, 0.0, 1.0))

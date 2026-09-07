@@ -75,6 +75,7 @@ class MainWindow(QMainWindow):
         self.editing_panel.radius_changed.connect(self.viewport.set_influence_radius)
         self.editing_panel.strength_changed.connect(self.viewport.set_edit_strength)
         self.editing_panel.falloff_changed.connect(self.viewport.set_falloff)
+        self.editing_panel.dissolve_region_requested.connect(self.viewport.dissolve_region_between_anchors)
 
     def create_menu_bar(self):
         menubar = self.menuBar()

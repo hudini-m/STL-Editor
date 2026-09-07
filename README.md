@@ -13,6 +13,7 @@ STL Editor is a Python desktop application for local STL deformation through ort
 - Choose smooth contour editing or point-wise editing for a direct local vertex change.
 - Adjust influence radius and edit strength from the deformation controls.
 - Shift-click control points to set anchors that constrain a local edit region.
+- Pin two points and use **Dissolve Region Between Anchors** to blend the contour between them.
 - Preview selected, anchored, and locally affected control points.
 - Transfer a compact local 2D displacement field to the STL without changing the third axis.
 - Undo, redo, reset, validate, and export the current mesh.
@@ -50,8 +51,9 @@ python run.py
 4. Click a point to select it. Violet points show the local automatic influence region.
 5. Drag the selected point to deform the local contour and nearby mesh region.
 6. Use Shift-click to toggle two blue anchors and limit deformation to the contour section between them.
-7. Open **3D Inspection** to review the modified mesh.
-8. Save the current result as STL.
+7. Optionally use **Dissolve Region Between Anchors** to replace the bounded section with a smooth blend.
+8. Open **3D Inspection** to review the modified mesh.
+9. Save the current result as STL.
 
 ## Example
 
